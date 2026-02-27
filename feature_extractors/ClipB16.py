@@ -7,8 +7,10 @@ from torchvision import transforms
 class ClipB16FeatureExtractor(BaseFeatureExtractor):
     def __init__(self):
         super(ClipB16FeatureExtractor, self).__init__()
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+        # 使用本地下载的模型路径
+        local_model_path = "models/openai/clip-vit-base-patch16"
+        self.model = CLIPModel.from_pretrained(local_model_path)
+        self.processor = CLIPProcessor.from_pretrained(local_model_path)
         self.normalizer = transforms.Compose(
         [
             transforms.Resize(224, interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),

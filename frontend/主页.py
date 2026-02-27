@@ -92,22 +92,28 @@ col1, col2 = st.columns([1, 1])
 # 对抗图像生成卡片
 with col1:
     st.markdown("""
-    <div class="option-card" onclick="window.location.href = '/adversarial_image_generation'">
+    <div class="option-card">
         <div class="option-card-icon">🎨</div>
         <h2 class="option-card-title">对抗图像生成</h2>
         <p class="option-card-description">生成对抗图像，测试模型的鲁棒性。上传原始图像，选择攻击算法，生成对抗样本。</p>
     </div>
     """, unsafe_allow_html=True)
+    if st.button("进入生成页面", key="btn_generate", use_container_width=True):
+        # 使用Streamlit的页面切换功能
+        st.switch_page("pages/1-对抗图像生成.py")
 
 # 对抗图像测试卡片
 with col2:
     st.markdown("""
-    <div class="option-card" onclick="window.location.href = '/adversarial_image_testing'">
+    <div class="option-card">
         <div class="option-card-icon">🔬</div>
         <h2 class="option-card-title">对抗图像测试</h2>
         <p class="option-card-description">测试对抗图像的效果，对比原始图像和对抗图像的模型预测结果，分析模型性能。</p>
     </div>
     """, unsafe_allow_html=True)
+    if st.button("进入测试页面", key="btn_test", use_container_width=True):
+        # 使用Streamlit的页面切换功能
+        st.switch_page("pages/2-对抗图像测试.py")
 
 # 页脚信息
 st.markdown('<p style="color: #94a3b8; font-size: 0.9rem;">© 2026 对抗图像系统</p>', unsafe_allow_html=True)

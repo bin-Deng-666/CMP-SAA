@@ -7,7 +7,8 @@ from torchvision import transforms
 class ClipLaionFeatureExtractor(BaseFeatureExtractor):
     def __init__(self):
         super(ClipLaionFeatureExtractor, self).__init__()
-        self.model = CLIPModel.from_pretrained("laion/CLIP-ViT-G-14-laion2B-s12B-b42K")
+        local_model_path = "laion/CLIP-ViT-G-14-laion2B-s12B-b42K"
+        self.model = CLIPModel.from_pretrained(local_model_path)
         # self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         self.normalizer = transforms.Compose(
         [
