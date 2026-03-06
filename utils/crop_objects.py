@@ -21,7 +21,8 @@ class Config:
     # 最小置信度阈值
     MIN_CONFIDENCE = 0.5
     # YOLO模型路径
-    YOLO_MODEL_PATH = "models/YOLO/yolov8m.pt"
+    # YOLO_MODEL_PATH = "models/YOLO/yolov8m.pt"
+    YOLO_MODEL_PATH = "models/YOLO/yolo26s.pt"
     # 输出目录
     OUTPUT_DIR = "data/cropped_objects"
 

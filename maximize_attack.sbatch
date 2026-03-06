@@ -18,10 +18,9 @@ initialize_default_parameters() {
     
     # 攻击参数
     FRACTION=1.0
-    ITERS=50
-    ALPHA=0.01
-    EPSILON=8.0
-    OUTPUT_DIR="./output"
+    ITERS=80
+    ALPHA=1
+    EPSILON=32
     
     # 硬件配置
     DEVICE="cuda"

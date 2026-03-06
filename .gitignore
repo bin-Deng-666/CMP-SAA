@@ -4,10 +4,14 @@ adversarial_images/
 # 数据目录
 data/
 
+# 输出
+output/
+
 # 大型模型目录
 models/Salesforce/
 models/YOLO/
 models/openai/
+models/laion
 
 # Python缓存目录
 __pycache__/

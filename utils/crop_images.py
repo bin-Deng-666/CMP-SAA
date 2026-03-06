@@ -188,61 +188,6 @@ def edge_crop(
     return crops
 
 
-def saliency_crop(
-    image_tensor: torch.Tensor,
-    num_crops: int = 3,
-    size: int = 128
-) -> List[Dict[str, torch.Tensor]]:
-    """基于显著性的裁剪图像
-
-    Args:
-        image_tensor: 原始图像张量 (shape: [1, 3, H, W])
-        num_crops: 裁剪数量
-        size: 裁剪尺寸
-
-    Returns:
-        包含裁剪图像和区域信息的字典列表
-    """
-    _, _, height, width = image_tensor.shape
-    crops = []
-    
-    # 简化实现：使用中心区域作为显著性区域
-    # 实际应用中可以使用预训练的显著性检测模型
-    center_x = width // 2
-    center_y = height // 2
-    
-    for i in range(num_crops):
-        # 围绕中心生成不同偏移的裁剪
-        offset_x = np.random.randint(-size//4, size//4)
-        offset_y = np.random.randint(-size//4, size//4)
-        
-        x1 = max(0, center_x - size//2 + offset_x)
-        y1 = max(0, center_y - size//2 + offset_y)
-        x2 = min(width, x1 + size)
-        y2 = min(height, y1 + size)
-        
-        # 调整位置以确保尺寸一致
-        if x2 - x1 < size:
-            x1 = max(0, x2 - size)
-        if y2 - y1 < size:
-            y1 = max(0, y2 - size)
-        
-        # 执行裁剪
-        cropped_image = image_tensor[:, :, y1:y2, x1:x2].clone()
-        
-        # 构建返回字典
-        crop_info = {
-            "cropped_image": cropped_image,
-            "region": (x1, y1, x2, y2),
-            "original_size": (y2 - y1, x2 - x1)
-        }
-        
-        # 添加到结果列表
-        crops.append(crop_info)
-    
-    return crops
-
-
 def yolo_crop(
     image_tensor: torch.Tensor,
     model_path: str = "models/YOLO/yolov8m.pt",
