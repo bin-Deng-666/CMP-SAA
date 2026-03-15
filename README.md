@@ -15,9 +15,9 @@ GraduationProject/
 │   └── __init__.py             # 模块初始化
 ├── frontend/                    # 前端可视化界面
 │   ├── pages/                   # 页面目录
-│   │   ├── 1-对抗图像生成.py   # 对抗图像生成页面
-│   │   └── 2-对抗图像测试.py   # 对抗图像测试页面
-│   └── 主页.py                  # 主页面入口
+│   │   ├── generate.py         # 对抗图像生成页面
+│   │   └── evaluate.py         # 对抗图像测试页面
+│   └── home.py                  # 主页面入口
 ├── models/                      # 模型定义
 │   ├── flamingo_src/            # Flamingo 模型源码
 │   │   ├── __init__.py
