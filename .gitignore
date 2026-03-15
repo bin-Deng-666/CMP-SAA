@@ -6,6 +6,7 @@ data/
 
 # 输出
 output/
+evaluation_results/
 
 # 大型模型目录
 models/Salesforce/
@@ -41,3 +42,6 @@ logs/
 # 临时文件
 temp/
 tmp/
+
+# 脚本文件
+scripts/

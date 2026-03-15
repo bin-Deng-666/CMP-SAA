@@ -30,18 +30,20 @@ except Exception as e:
 
 # 检查测试图片路径
 data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
-img_url = os.path.join(data_dir, 'demo1.png')
+img1_url = os.path.join(data_dir, 'demo1.png')
+img2_url = os.path.join(data_dir, 'demo2.jpg')
 
 # 确认图片文件存在
-if not os.path.exists(img_url):
-    print(f"Error: Image file not found at {img_url}")
-    # 可以添加一个提示，让用户知道如何获取测试图片
-    sys.exit(1)
+for img_url in [img1_url, img2_url]:
+    if not os.path.exists(img_url):
+        print(f"Error: Image file not found at {img_url}")
+        sys.exit(1)
 
 # 加载图片
 try:
-    raw_image = Image.open(img_url).convert('RGB')
-    print(f"Successfully loaded image: {img_url}")
+    raw_image1 = Image.open(img1_url).convert('RGB')
+    raw_image2 = Image.open(img2_url).convert('RGB')
+    print(f"Successfully loaded 2 images: {img1_url}, {img2_url}")
 except Exception as e:
     print(f"Error loading image: {e}")
     sys.exit(1)
@@ -49,22 +51,23 @@ except Exception as e:
 # 打印设备信息
 print(f"Using device: {'GPU' if model_args['device'] >=0 else 'CPU'}")
 
-# 定义测试问题
+# 定义测试问题（2个相同的文本提示）
 test_questions = [
-    "What is the main object in this image?",
-    "What color is the object?",
-    "Describe the background of this image"
+    "what is the main object in the image?",
+    "what is the main object in the image?"
 ]
 
 # 准备prompt和图片批次
 batch_text = []
 for question in test_questions:
     # 获取每个问题的prompt格式
-    question_part, _ = model.get_vqa_prompt(question)
-    batch_text.append(question_part)
+    question_part, answer_part = model.get_vqa_prompt(question)
+    batch_text.append(question_part+answer_part)
 
-# 为每个问题准备相同的图片批次
-batch_images = [[raw_image]] * len(test_questions)
+# 准备图片批次：2张图片，每张图片对应1个相同的文本提示
+batch_images = [[raw_image1], [raw_image2]]
+
+print(f"\nBatch size: {len(batch_text)} questions, {len(batch_images)} images")
 
 # 生成回答
 try:
@@ -79,8 +82,7 @@ try:
     # 打印问题和对应的回答
     print("\nQuestion-Answer Results:")
     for i, (question, output) in enumerate(zip(test_questions, outputs)):
-        print(f"\nQuestion {i+1}: {question}")
-        print(f"Answer: {output}")
+        print(output)
 except Exception as e:
     print(f"Error during model inference: {e}")
     sys.exit(1)

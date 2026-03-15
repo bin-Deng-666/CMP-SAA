@@ -1,32 +1,58 @@
-# 多模态模型对抗攻击研究
+# GraduationProject
 
-本毕业设计项目实现了两种针对多模态模型的对抗攻击方法，用于研究和评估模型在对抗样本下的鲁棒性。
+对抗攻击研究项目，包含对抗样本生成、评估和可视化工具。
 
-## 核心功能
-
-### 1. 图像嵌入向量距离最大化攻击 (`maximize_embedding.py`)
-通过生成对抗扰动，最大化目标图像集合与原始图像在多个特征提取器（如CLIP系列模型）中的嵌入向量距离，从而降低模型对图像内容的识别能力。
-
-### 2. 文本嵌入对抗攻击 (`train.py`)
-实现了多种文本嵌入攻击方法，包括：
-- `embed_noise`: 向文本嵌入添加高斯噪声
-- `token_noise`: 对输入token添加整数噪声
-- `grad_embed_noise`: 使用梯度优化生成对抗嵌入噪声
-- `embed_adv`: 生成专门的对抗嵌入序列
-
-## 文件结构
+## 文件树
 
 ```
 GraduationProject/
-├── feature_extractors/   # 特征提取器实现（CLIP系列模型）
-├── models/              # 多模态评估模型实现
-├── utils/               # 工具函数
-├── test/                # 测试文件
-├── maximize_embedding.py # 图像嵌入距离最大化攻击
-├── train.py             # 文本嵌入对抗攻击
-├── attack.sbatch        # Slurm攻击脚本
-├── evaluate.sbatch      # Slurm评估脚本
-├── run_attack.sbatch    # 运行攻击脚本
-├── run_evaluate.sh      # 运行评估脚本
-└── .gitignore           # Git忽略文件配置
+├── feature_extractors/          # 特征提取器模块
+│   ├── Base.py                  # 基础特征提取器类
+│   ├── ClipB16.py              # CLIP B16 特征提取器
+│   ├── ClipB32.py              # CLIP B32 特征提取器
+│   ├── ClipL336.py             # CLIP L336 特征提取器
+│   ├── ClipLaion.py            # CLIP Laion 特征提取器
+│   └── __init__.py             # 模块初始化
+├── frontend/                    # 前端可视化界面
+│   ├── pages/                   # 页面目录
+│   │   ├── 1-对抗图像生成.py   # 对抗图像生成页面
+│   │   └── 2-对抗图像测试.py   # 对抗图像测试页面
+│   └── 主页.py                  # 主页面入口
+├── models/                      # 模型定义
+│   ├── flamingo_src/            # Flamingo 模型源码
+│   │   ├── __init__.py
+│   │   ├── detail of lang encoder.md
+│   │   ├── factory.py
+│   │   ├── flamingo.py
+│   │   ├── flamingo_lm.py
+│   │   ├── helpers.py
+│   │   └── utils.py
+│   ├── BaseEvalModel.py         # 基础评估模型类
+│   ├── blip2.py                # BLIP2 模型实现
+│   └── instructblip.py         # InstructBLIP 模型实现
+├── test/                        # 测试脚本
+│   ├── test_dataset_loading.py  # 数据集加载测试
+│   ├── test_embeddings.py       # 嵌入测试
+│   ├── test_model_loading.py    # 模型加载测试
+│   └── test_pytorch.py          # PyTorch 测试
+├── utils/                       # 工具函数
+│   ├── __init__.py
+│   ├── attack_tool.py           # 攻击工具函数
+│   ├── crop_images.py           # 图像裁剪工具
+│   ├── crop_objects.py          # 目标裁剪工具
+│   ├── env_desc.py              # 环境描述
+│   ├── eval_datasets.py         # 评估数据集
+│   └── eval_tool.py             # 评估工具函数
+├── .gitignore                   # Git 忽略配置
+├── cma.py                       # CMA-ES 攻击算法
+├── maximize.py                  # 最大化攻击算法
+└── test.py                      # 主测试脚本
 ```
+
+## 主要功能模块
+
+- **对抗攻击算法**: `cma.py`, `maximize.py`
+- **模型实现**: `models/` 目录下的 BLIP2、InstructBLIP 等
+- **评估工具**: `utils/eval_tool.py`, `test.py`
+- **可视化界面**: `frontend/` 目录下的 Streamlit 应用
+- **特征提取**: `feature_extractors/` 目录下的 CLIP 系列提取器

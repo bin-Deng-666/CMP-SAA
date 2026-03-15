@@ -144,13 +144,13 @@ def load_image_collection(image_tensor, crop_types: List[str] = ["random"], num_
     _, _, height, width = image_tensor.shape
 
     crops = []
-    original_image_info = {
-        "cropped_image": image_tensor.clone(),
-        "region": (0, 0, width, height),
-        "original_size": (height, width),
-        "crop_type": "original"
-    }
-    crops.append(original_image_info)
+    # original_image_info = {
+    #     "cropped_image": image_tensor.clone(),
+    #     "region": (0, 0, width, height),
+    #     "original_size": (height, width),
+    #     "crop_type": "original"
+    # }
+    # crops.append(original_image_info)
 
     for crop_type in crop_types:
         if crop_type == "random":
@@ -357,7 +357,8 @@ def attack(config: AttackConfig) -> None:
         )
 
         # 创建保存目录结构
-        output_dir = os.path.join("adversarial_images", "maximize"+ "_"+ )
+        crop_types_str = "_".join(config.crop_types)
+        output_dir = os.path.join("adversarial_images", f"maximize_{crop_types_str}")
         os.makedirs(output_dir, exist_ok=True)
 
         # 为每个样本创建独立文件夹

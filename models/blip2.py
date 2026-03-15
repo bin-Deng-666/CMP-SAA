@@ -56,26 +56,17 @@ class EvalModel(BaseEvalModel):
         num_beams: int,
         length_penalty: float,
     ) -> List[str]:
-        pixel_values = self._prepare_images(batch_images)
-        
         inputs = self.processor(
             text=batch_text,
-            images=None,
+            images=batch_images,
             padding=True,
             truncation=True,
-            max_length=2000,
+            max_length=256,
             return_tensors="pt"
         ).to(self.device)
         
         with torch.inference_mode():
-            outputs = self.model.generate(
-                input_ids=inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                pixel_values=pixel_values,
-                max_new_tokens=max_generation_length,
-                num_beams=num_beams,
-                length_penalty=length_penalty
-            )
+            outputs = self.model.generate(**inputs)
 
         return self.processor.batch_decode(outputs, skip_special_tokens=True)
 
@@ -89,17 +80,32 @@ class EvalModel(BaseEvalModel):
         length_penalty: float,
     ) -> List[str]:
         # 统一处理流程
+        print(f"输入batch_images类型: {type(batch_images)}")
+        print(f"输入batch_images长度: {len(batch_images)}")
+        if batch_images:
+            print(f"第一个元素类型: {type(batch_images[0])}")
+            print(f"第一个元素长度: {len(batch_images[0])}")
+            if batch_images[0]:
+                print(f"第一个图像类型: {type(batch_images[0][0])}")
+                print(f"第一个图像尺寸: {batch_images[0][0].size}")
+
         pixel_values = self._prepare_images(batch_images, normalize=False)
+
+        print(f"输出pixel_values类型: {type(pixel_values)}")
+        print(f"输出pixel_values形状: {pixel_values.shape}")
+        print(f"输出pixel_values范围: [{pixel_values.min().item():.4f}, {pixel_values.max().item():.4f}]")
+
         pixel_values = transforms.Normalize(OPENAI_CLIP_MEAN, OPENAI_CLIP_STD)(
-            pixel_values + attack.to(self.device)
+            attack.to(self.device)
         )
+        pixel_values = pixel_values.unsqueeze(0).attack = attack.unsqueeze(0).expand(4, -1, -1, -1)
         
         inputs = self.processor(
             text=batch_text,
             images=None,
             padding=True,
             truncation=True,
-            max_length=2000,
+            max_length=256,
             return_tensors="pt"
         ).to(self.device)
         
