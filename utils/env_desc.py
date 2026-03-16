@@ -16,8 +16,13 @@ os.makedirs(os.path.dirname(output_path), exist_ok=True)
 _, test_dataset = load_dataset()
 test_dataset = get_subset(dataset=test_dataset, frac=1)
 
+# 从环境变量获取 API key
+api_key = os.getenv("SILICONFLOW_API_KEY")
+if not api_key:
+    raise ValueError("请设置环境变量 SILICONFLOW_API_KEY")
+
 client = OpenAI(
-    api_key="sk-drszqbypcxdnqjurtdqlwlajlzlizpgcshwudnqwnjkayiui",
+    api_key=api_key,
     base_url="https://api.siliconflow.cn/v1"
 )
 
