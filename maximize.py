@@ -54,7 +54,7 @@ class AttackConfig:
             alpha: 学习率
             epsilon: 最大扰动范围
             device: 运行设备
-            crop_types: 裁剪类型列表，可选值: random, yolo, center, grid, edge, saliency
+            crop_types: 裁剪类型列表，可选值: random, yolo, center, grid, edge
             num_crops: 裁剪数量
         """
         self.extractors = extractors
