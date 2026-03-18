@@ -426,7 +426,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         '--crop-types', '-c', type=str, nargs='+', default=["random"],
-        help='裁剪类型列表，可选值: random, yolo, center, grid, edge, saliency (默认: random)'
+        help='裁剪类型列表，可选值: random, yolo, center, grid, edge (默认: random)'
     )
 
     parser.add_argument(

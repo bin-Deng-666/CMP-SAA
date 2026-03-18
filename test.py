@@ -103,6 +103,7 @@ class AttackEvaluator:
                 processed_adv = [self._postprocess(p) for p in adv_outputs]
 
                 for i, question in enumerate(batch):
+                    print(f"图像id: {img_id}")
                     print(f"问题: {question}")
                     print(f"Ori回答: {processed_ori[i]}")
                     print(f"Adv回答: {processed_adv[i]}")

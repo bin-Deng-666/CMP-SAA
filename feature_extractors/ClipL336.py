@@ -7,7 +7,7 @@ from torchvision import transforms
 class ClipL336FeatureExtractor(BaseFeatureExtractor):
     def __init__(self):
         super(ClipL336FeatureExtractor, self).__init__()
-        local_model_path = "models/openai/clip-vit-base-patch16"
+        local_model_path = "models/openai/clip-vit-large-patch14-336"
         self.model = CLIPModel.from_pretrained(local_model_path)
         self.processor = CLIPProcessor.from_pretrained(local_model_path)
         self.normalizer = transforms.Compose(
