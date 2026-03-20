@@ -12,6 +12,10 @@ MODEL_CONFIG = {
     "blip2": {
         "lm_path": "models/Salesforce/blip2-opt-2.7b",
         "processor_path": "models/Salesforce/blip2-opt-2.7b"
+    },
+    "instructblip": {
+        "lm_path": "models/Salesforce/instructblip-vicuna-7b",
+        "processor_path": "models/Salesforce/instructblip-vicuna-7b"
     }
 }
 
@@ -52,13 +56,24 @@ def load_model(device, module, model_name):
     print("model_name is:", model_name)
     if model_name == "blip2":
         return load_blip_model(device, module)
+    elif model_name == "instructblip":
+        return load_instructblip_model(device, module)
     else:
-        raise ValueError("model name is not valid")
+        raise ValueError(f"model name '{model_name}' is not valid")
     
 
 def load_blip_model(device, module):
     model_args = {
         **MODEL_CONFIG["blip2"],  # 展开配置参数
+        'device': device  # 单独添加设备参数
+    }
+    eval_model = module.EvalModel(model_args)
+    return eval_model
+
+
+def load_instructblip_model(device, module):
+    model_args = {
+        **MODEL_CONFIG["instructblip"],  # 展开配置参数
         'device': device  # 单独添加设备参数
     }
     eval_model = module.EvalModel(model_args)
