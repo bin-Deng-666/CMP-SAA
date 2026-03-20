@@ -36,6 +36,7 @@ class AttackConfig:
         self,
         extractors,
         datasets,
+        backbones: List[str],
         fraction: float = 0.05,
         iters: int = 50,
         alpha: float = 1,
@@ -49,6 +50,7 @@ class AttackConfig:
         Args:
             extractors: 特征提取器
             datasets: 数据集元组
+            backbones: 骨干网络名称列表
             fraction: 数据比例
             iters: 优化迭代次数
             alpha: 学习率
@@ -59,6 +61,7 @@ class AttackConfig:
         """
         self.extractors = extractors
         self.datasets = datasets
+        self.backbones = backbones
         self.fraction = fraction
         self.iters = iters
         self.alpha = alpha
@@ -295,7 +298,7 @@ def print_config(config: AttackConfig) -> None:
     print(f"- 设备: {config.device}")
     print(f"- 裁剪类型: {', '.join(config.crop_types)}")
     print(f"- 裁剪数量: {config.num_crops}")
-    print(f"- 骨干网络: {'B16, B32, L336, Laion' if config.extractors else '未知'}")
+    print(f"- 骨干网络: {', '.join(config.backbones) if config.backbones else '未知'}")
     print(f"- 训练集大小: {len(config.datasets[0])}")
     print(f"- 测试集大小: {len(config.datasets[1])}")
 
@@ -357,8 +360,9 @@ def attack(config: AttackConfig) -> None:
         )
 
         # 创建保存目录结构
+        backbones_str = "_".join(config.backbones)
         crop_types_str = "_".join(config.crop_types)
-        output_dir = os.path.join("adversarial_images", f"maximize_{crop_types_str}")
+        output_dir = os.path.join("adversarial_images", f"maximize_{backbones_str}_{crop_types_str}")
         os.makedirs(output_dir, exist_ok=True)
 
         # 为每个样本创建独立文件夹
@@ -444,6 +448,7 @@ if __name__ == "__main__":
     config = AttackConfig(
         extractors=extractors,
         datasets=(train_dataset, test_dataset),
+        backbones=args.backbones,
         fraction=args.fraction,
         iters=args.iters,
         alpha=args.alpha,

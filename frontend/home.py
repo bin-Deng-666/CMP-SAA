@@ -110,7 +110,7 @@ with col1:
     <div class="card">
         <div class="card-icon">🛡️</div>
         <div class="card-title">生成对抗样本</div>
-        <div class="card-desc">使用 FGSM、PGD、CMA 等算法生成对抗图像</div>
+        <div class="card-desc">使用CMA和Maximize方法生成对抗图像</div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("开始生成", key="gen", use_container_width=True):
@@ -121,11 +121,11 @@ with col2:
     <div class="card">
         <div class="card-icon">📊</div>
         <div class="card-title">评估攻击效果</div>
-        <div class="card-desc">测试模型鲁棒性，分析攻击成功率</div>
+        <div class="card-desc">对比原始图像和对抗图像的模型输出，评估攻击效果</div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("开始评估", key="eval", use_container_width=True):
         st.switch_page("pages/evaluate.py")
 
 # 页脚
-st.markdown('<div class="footer">毕业设计项目 · 支持 BLIP2 / InstructBLIP</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">毕业设计项目 · ZY2306335 邓彬 · 支持 BLIP2 / InstructBLIP</div>', unsafe_allow_html=True)

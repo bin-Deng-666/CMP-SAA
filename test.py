@@ -243,7 +243,7 @@ def evaluate_method_performance(eval_model, args, method_name="baseline"):
 
     # 获取所有图像ID子目录
     img_dirs = [d for d in os.listdir(method_dir) if os.path.isdir(os.path.join(method_dir, d))]
-    img_dirs = img_dirs[0:10]
+    img_dirs = img_dirs[0:20]
     
     for img_id in tqdm(img_dirs, desc=f"Evaluating {method_name}"):
         img_dir = os.path.join(method_dir, img_id)

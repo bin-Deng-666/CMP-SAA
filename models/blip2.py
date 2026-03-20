@@ -66,7 +66,12 @@ class EvalModel(BaseEvalModel):
         ).to(self.device)
         
         with torch.inference_mode():
-            outputs = self.model.generate(**inputs)
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_generation_length,
+                num_beams=num_beams,
+                length_penalty=length_penalty
+            )
 
         return self.processor.batch_decode(outputs, skip_special_tokens=True)
 

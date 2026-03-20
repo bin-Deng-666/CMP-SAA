@@ -7,6 +7,8 @@ import torch
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from utils.attack_tool import load_dataset, get_subset
+
 st.set_page_config(page_title="对抗图像生成", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -44,12 +46,12 @@ with header_col2:
 st.divider()
 
 # 初始化会话状态
-if 'original_image' not in st.session_state:
+if 'page_initialized' not in st.session_state:
     st.session_state.original_image = None
-if 'adversarial_image' not in st.session_state:
     st.session_state.adversarial_image = None
-if 'perturbation' not in st.session_state:
     st.session_state.perturbation = None
+    st.session_state.img_id = None
+    st.session_state.page_initialized = True
 
 
 # ==================== 步骤1: 选择攻击方法 ====================
@@ -72,7 +74,7 @@ if method != "请选择...":
         
         col1, col2 = st.columns(2)
         with col1:
-            target_text = st.text_input("指定攻击文本", placeholder="输入攻击目标文本", help="指定攻击的目标文本")
+            target_text = st.text_input("指定攻击文本", value="Unknown", help="指定攻击的目标文本")
         with col2:
             prompt_num = st.selectbox("用于训练的文本提示数量", [25, 50, 70, 100], index=0, help="选择训练时使用的文本提示数量")
         
@@ -147,35 +149,45 @@ if method != "请选择...":
     
     col1, col2 = st.columns([4, 1])
     with col1:
-        img_id = st.text_input("图像ID", placeholder="请输入图像ID，例如: 294")
+        img_id = st.text_input("图像ID", placeholder="请输入图像ID，例如: 294", label_visibility="collapsed")
     with col2:
-        load_btn = st.button("📁 加载图像", use_container_width=True, type="secondary")
+        load_btn = st.button("📂 加载图像", use_container_width=True, type="secondary")
     
-    def load_image_by_id(image_id):
-        """根据图像ID加载图像 - 待实现"""
-        # TODO: 实现图像加载逻辑
-        # 例如: 从数据库、文件系统或API加载图像
-        pass
+    @st.cache_data
+    def get_test_dataset():
+        """缓存加载测试数据集"""
+        _, test_dataset = load_dataset()
+        return test_dataset
+    
+    def load_image_by_id(image_id, dataset):
+        """根据图像ID从数据集加载图像"""
+        for item in dataset:
+            if str(item["image_id"]) == str(image_id):
+                return item["image"]
+        return None
     
     if load_btn and img_id:
         with st.spinner("正在加载图像..."):
-            # 调用加载函数
-            loaded_image = load_image_by_id(img_id)
+            # 加载数据集
+            test_dataset = get_test_dataset()
             
-            # TODO: 实际加载完成后赋值
-            # st.session_state.original_image = loaded_image
+            # 根据ID加载图像
+            loaded_image = load_image_by_id(img_id, test_dataset)
             
-            # 临时模拟加载成功
-            st.session_state.original_image = None
-            st.success(f"✅ 图像 {img_id} 加载成功")
+            if loaded_image is None:
+                st.error(f"未找到图像ID: {img_id}")
+            else:
+                st.session_state.original_image = loaded_image
+                st.session_state.img_id = img_id
+                st.success(f"✅ 图像 {img_id} 加载成功")
     elif load_btn and not img_id:
         st.warning("请输入图像ID")
     
     # 显示原始图像
     if st.session_state.original_image:
-        st.image(st.session_state.original_image, caption="原始图像", use_column_width=True)
+        st.image(st.session_state.original_image, caption="原始图像", use_container_width=True)
     else:
-        st.info("💡 请输入图像ID并点击加载按钮")
+        st.info("请输入图像ID并点击加载按钮")
     
     # ==================== 步骤4: 生成对抗图像 ====================
     if st.session_state.original_image:
@@ -209,16 +221,16 @@ if method != "请选择...":
             
             with result_col1:
                 st.markdown("**🖼️ 原始图像**")
-                st.image(st.session_state.original_image, use_column_width=True)
+                st.image(st.session_state.original_image, use_container_width=True)
             
             with result_col2:
                 st.markdown("**🛡️ 对抗图像**")
-                st.image(st.session_state.adversarial_image, use_column_width=True)
+                st.image(st.session_state.adversarial_image, use_container_width=True)
             
             with result_col3:
                 st.markdown("**🔍 扰动可视化**")
                 if st.session_state.perturbation is not None:
-                    st.image(st.session_state.perturbation, use_column_width=True)
+                    st.image(st.session_state.perturbation, use_container_width=True)
                 else:
                     st.info("暂不可用")
             
