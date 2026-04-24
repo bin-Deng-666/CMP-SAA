@@ -102,6 +102,23 @@ cuda_available = torch.cuda.is_available()
 status_text = f"GPU 可用 ({torch.cuda.device_count()} 设备)" if cuda_available else "CPU 模式"
 st.markdown(f'<div style="text-align: center; margin-bottom: 3rem;"><span class="badge"><span class="badge-dot" style="background: {"#22c55e" if cuda_available else "#f59e0b"};"></span>{status_text}</span></div>', unsafe_allow_html=True)
 
+# GPU 详细信息展开
+if cuda_available:
+    with st.expander("📋 查看显卡详细信息"):
+        for i in range(torch.cuda.device_count()):
+            device_name = torch.cuda.get_device_name(i)
+            total_memory = torch.cuda.get_device_properties(i).total_memory / (1024**3)  # GB
+            st.markdown(f"""
+            <div style="background: #f8fafc; border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem;">
+                <div style="font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">
+                    GPU {i}: {device_name}
+                </div>
+                <div style="color: #64748b; font-size: 0.9rem;">
+                    显存: {total_memory:.2f} GB
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
 # 功能卡片
 col1, col2 = st.columns(2, gap="medium")
 

@@ -147,13 +147,13 @@ def load_image_collection(image_tensor, crop_types: List[str] = ["random"], num_
     _, _, height, width = image_tensor.shape
 
     crops = []
-    # original_image_info = {
-    #     "cropped_image": image_tensor.clone(),
-    #     "region": (0, 0, width, height),
-    #     "original_size": (height, width),
-    #     "crop_type": "original"
-    # }
-    # crops.append(original_image_info)
+    original_image_info = {
+        "cropped_image": image_tensor.clone(),
+        "region": (0, 0, width, height),
+        "original_size": (height, width),
+        "crop_type": "original"
+    }
+    crops.append(original_image_info)
 
     for crop_type in crop_types:
         if crop_type == "random":
@@ -429,7 +429,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--crop-types', '-c', type=str, nargs='+', default=["random"],
+        '--crop-types', '-c', type=str, nargs='+', default=[],
         help='裁剪类型列表，可选值: random, yolo, center, grid, edge (默认: random)'
     )
 

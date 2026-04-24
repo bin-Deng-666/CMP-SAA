@@ -3,11 +3,13 @@ import sys
 import os
 from PIL import Image
 import torch
+import io
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from utils.attack_tool import load_dataset, get_subset
+from utils.attack_tool import load_dataset
+from utils.maximize_image import generate_adversarial_image
 
 st.set_page_config(page_title="对抗图像生成", layout="wide", initial_sidebar_state="collapsed")
 
@@ -80,17 +82,17 @@ if method != "请选择...":
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            adv_length = st.slider("文本辅助后缀长度", min_value=0, max_value=40, value=10, help="对抗文本后缀的长度")
+            adv_length = st.slider("文本辅助后缀长度", min_value=0, max_value=40, value=16, help="对抗文本后缀的长度")
         with col2:
             iters = st.number_input("迭代轮次", min_value=100, max_value=2000, value=500, step=50, help="训练迭代轮次")
         with col3:
-            fraction = st.slider("扰动大小限制", min_value=16/255, max_value=32/255, value=16/255, step=1/255, format="%.4f", help="扰动的最大大小限制")
+            fraction = st.slider("扰动大小限制 (1/255)", min_value=1, max_value=32, value=16, step=1, help="扰动的最大大小限制，范围 1-32 (对应 1/255 到 32/255)") / 255
         
         # 高级选项
         with st.expander("高级选项"):
             col1, col2 = st.columns(2)
             with col1:
-                img_lr = st.slider("图像扰动学习率", min_value=1/255, max_value=4/255, value=1/255, step=0.5/255, format="%.4f", help="图像扰动的学习率")
+                img_lr = st.slider("图像扰动学习率 (1/255)", min_value=1, max_value=4, value=1, step=1, help="图像扰动的学习率，范围 1-4 (对应 1/255 到 4/255)") / 255
             with col2:
                 suffix_lr = st.number_input("文本辅助后缀学习率", min_value=0.001, max_value=0.1, value=0.01, step=0.001, format="%.3f", help="文本后缀的学习率")
     
@@ -128,18 +130,18 @@ if method != "请选择...":
             with col1:
                 num_crops = st.number_input("裁剪数量", min_value=1, max_value=20, value=6, step=1)
             with col2:
-                min_crop_size = st.slider("最小裁剪长度", min_value=0.1, max_value=1.0, value=0.5, step=0.05, 
-                                         help="相对于图像长宽最小值的裁剪比例")
+                min_crop_size = st.slider("最小裁剪比例 (%)", min_value=10, max_value=100, value=50, step=5, 
+                                         help="相对于图像长宽最小值的裁剪比例") / 100
         
         # yolo 裁剪参数
         if "yolo" in crop_types:
             st.markdown("*YOLO 裁剪参数*")
             col1, col2 = st.columns(2)
             with col1:
-                yolo_confidence = st.slider("最小置信度", min_value=0.1, max_value=0.9, value=0.5, step=0.05)
+                yolo_confidence = st.slider("最小置信度 (%)", min_value=10, max_value=90, value=50, step=5) / 100
             with col2:
-                yolo_min_area = st.slider("最小裁剪面积", min_value=0.01, max_value=0.5, value=0.05, step=0.01,
-                                         help="相对于图像整体面积的最小比例")
+                yolo_min_area = st.slider("最小裁剪面积 (%)", min_value=1, max_value=50, value=5, step=1,
+                                         help="相对于图像整体面积的最小比例") / 100
     
     st.divider()
     
@@ -200,16 +202,61 @@ if method != "请选择...":
         
         if generate_btn:
             with st.spinner("正在生成对抗图像，请稍候..."):
-                # TODO: 调用实际的攻击算法
-                # 这里先模拟生成过程
-                import time
-                time.sleep(2)
+                if method == "多维度语义攻击方法":
+                    try:
+                        # 获取参数
+                        backbones_list = backbones if backbones else ["B16"]
+                        crop_types_list = crop_types if crop_types else ["random"]
+                        
+                        # 创建进度区域
+                        progress_container = st.container()
+                        with progress_container:
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                        
+                        def progress_callback(current, total, loss):
+                            progress = current / total
+                            progress_bar.progress(min(progress, 1.0))
+                            status_text.text(f"迭代进度: {current}/{total}, 当前距离: {loss:.4f}")
+                        
+                        # 获取参数（注意百分比转换）
+                        random_num_crops = num_crops if "random" in crop_types_list else 6
+                        # min_crop_size 已经是 0-1 范围（slider返回的是百分比/100）
+                        random_min_ratio = min_crop_size if "random" in crop_types_list else 0.5
+                        # yolo_confidence 和 yolo_min_area 已经是 0-1 范围
+                        yolo_conf = yolo_confidence if "yolo" in crop_types_list else 0.5
+                        yolo_area = yolo_min_area if "yolo" in crop_types_list else 0.05
+                        
+                        # 调用多维度语义攻击方法
+                        original_pil, adv_pil, perturbation_pil = generate_adversarial_image(
+                            image=st.session_state.original_image,
+                            backbones=backbones_list,
+                            crop_types=crop_types_list,
+                            num_crops=random_num_crops,
+                            iterations=iterations,
+                            alpha=alpha,
+                            epsilon=epsilon,
+                            min_crop_ratio=random_min_ratio,
+                            yolo_confidence=yolo_conf,
+                            yolo_min_area_ratio=yolo_area,
+                            device="cuda" if torch.cuda.is_available() else "cpu",
+                            progress_callback=progress_callback
+                        )
+                        
+                        st.session_state.adversarial_image = adv_pil
+                        st.session_state.perturbation = perturbation_pil
+                        
+                        progress_container.empty()
+                        st.success("✅ 对抗图像生成完成！")
+                        
+                    except Exception as e:
+                        st.error(f"生成失败: {str(e)}")
+                        import traceback
+                        st.error(traceback.format_exc())
                 
-                # 模拟结果（实际应调用 maximize.py 或 cma.py）
-                st.session_state.adversarial_image = st.session_state.original_image
-                st.session_state.perturbation = None
-                
-                st.success("✅ 对抗图像生成完成！")
+                elif method == "跨模态辅助攻击方法":
+                    st.warning("跨模态辅助攻击方法正在开发中...")
+                    # TODO: 实现 CMA 攻击方法调用
         
         
         # ==================== 步骤5: 显示结果 ====================

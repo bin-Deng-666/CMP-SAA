@@ -428,7 +428,7 @@ def attack(config: AttackConfig) -> None:
         # 初始化提示词轮换顺序
         item_images = [[item["image"]]]
         input_x_original = config.eval_model._prepare_images(item_images, normalize=False).to(config.device).requires_grad_(False)
-        image_perturbation = torch.zeros_like(input_x_original, device=config.device).requires_grad_(True)
+        image_perturbation = torch.randn([1,3,224,224], requires_grad=True, device=config.device)
         best_loss = torch.tensor(float('inf'))
         best_attack = None
 
