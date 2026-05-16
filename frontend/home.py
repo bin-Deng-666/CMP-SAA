@@ -1,7 +1,15 @@
 import streamlit as st
 import torch
 
+import bootstrap
+
+bootstrap.setup_project_path()
+
+from frontend.utils.page_state import mark_home_page
+
 st.set_page_config(page_title="对抗图像系统", layout="centered", initial_sidebar_state="collapsed")
+
+mark_home_page()
 
 st.markdown("""
 <style>

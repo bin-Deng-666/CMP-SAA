@@ -17,7 +17,12 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from utils.attack_tool import load_model, get_img_id_train_prompt_map, get_img_id_environment_map
+from utils.attack_tool import (
+    load_model,
+    get_img_id_train_prompt_map,
+    get_img_id_environment_map,
+    get_intended_token_ids,
+)
 
 
 @dataclass
@@ -82,23 +87,49 @@ def tensor_to_pil(tensor: torch.Tensor) -> Image.Image:
     return Image.fromarray(img_np)
 
 
-def load_eval_model(model_name: str, device: int):
-    """加载评估模型
-    
-    Args:
-        model_name: 模型名称，如 "blip2", "instructblip"
-        device: GPU设备号
-    
-    Returns:
-        加载好的模型实例
-    """
-    module = importlib.import_module(f"models.{model_name}")
-    model_args = {
-        "lm_path": f"models/Salesforce/{model_name}-opt-2.7b" if model_name == "blip2" else f"models/Salesforce/{model_name}-vicuna-7b",
-        "processor_path": f"models/Salesforce/{model_name}-opt-2.7b" if model_name == "blip2" else f"models/Salesforce/{model_name}-vicuna-7b",
-        "device": device
+def _build_inputs_for_embed_adv(
+    question_inputs: Dict[str, torch.Tensor],
+    answer_inputs: torch.Tensor,
+    question_embeddings: torch.Tensor,
+    answer_embeddings: torch.Tensor,
+    current_target: torch.Tensor,
+    adversarial_embeddings: torch.Tensor,
+    adversarial_length: int,
+    processor,
+) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    """与 cma.py 中 build_inputs_for_embed_adv 保持一致。"""
+    combined_embeddings = torch.cat(
+        [question_embeddings, adversarial_embeddings, answer_embeddings], dim=1
+    )
+
+    pad_token_id = processor.tokenizer.pad_token_id
+    padded_input_ids = torch.cat(
+        [
+            question_inputs.input_ids,
+            torch.full(
+                (1, adversarial_length),
+                pad_token_id,
+                device=question_inputs.input_ids.device,
+            ),
+            answer_inputs,
+        ],
+        dim=1,
+    )
+    combined_attention_mask = torch.cat(
+        [
+            question_inputs.attention_mask,
+            torch.ones((1, adversarial_length), device=question_inputs.input_ids.device),
+            torch.ones_like(answer_inputs),
+        ],
+        dim=1,
+    )
+    inputs = {
+        "input_ids": padded_input_ids,
+        "attention_mask": combined_attention_mask,
     }
-    return module.EvalModel(model_args)
+
+    labels = get_intended_token_ids(inputs["input_ids"], current_target)
+    return inputs, labels, combined_embeddings
 
 
 def generate_adversarial_image_cma(
@@ -170,19 +201,25 @@ def generate_adversarial_image_cma_with_config(
         Tuple[Image.Image, Image.Image, Image.Image]: 
             (原始图像, 对抗图像, 扰动可视化图像)
     """
-    # 设置设备
-    device_str = f"cuda:{config.device}" if config.device >= 0 else "cpu"
-    
-    # 加载模型
+    # 设置设备（与 cma.py 保持一致：CUDA 用设备号，CPU 用字符串）
+    tensor_device = config.device if config.device >= 0 else "cpu"
+
+    # 加载模型（沿用 cma.py 的 load_model 流程）
     print(f"加载模型: {config.model_name}")
-    eval_model = load_eval_model(config.model_name, config.device)
+    module = importlib.import_module(f"models.{config.model_name}")
+    eval_model = load_model(config.device, module, config.model_name)
     processor = eval_model.processor
     
-    # 准备原始图像
-    original_image = pil_to_tensor(image, device_str)
+    # 准备原始图像（与 cma.py 对齐）
+    item_images = [[image]]
+    original_image = eval_model._prepare_images(
+        item_images, normalize=False
+    ).to(tensor_device).requires_grad_(False)
     
     # 初始化图像扰动
-    image_perturbation = torch.randn([1, 3, 224, 224], requires_grad=True, device=device_str)
+    image_perturbation = torch.randn(
+        [1, 3, 224, 224], requires_grad=True, device=tensor_device
+    )
     
     # 获取提示词
     img_id_to_train_prompt = get_img_id_train_prompt_map(config.prompt_num)
@@ -201,7 +238,7 @@ def generate_adversarial_image_cma_with_config(
     if config.method == "embed_adv":
         target_token_ids = processor.tokenizer.encode(config.target_text, add_special_tokens=False)
         adversarial_embeddings = eval_model.model.get_input_embeddings()(
-            torch.tensor(target_token_ids, device=device_str)
+            torch.tensor(target_token_ids, device=tensor_device)
         ).repeat(1, config.adversarial_length // len(target_token_ids) + 1, 1)[:, :config.adversarial_length, :]
         adversarial_embeddings = adversarial_embeddings.clone().detach().requires_grad_(True)
         adversarial_embeddings_init = adversarial_embeddings.clone().detach()
@@ -235,58 +272,57 @@ def generate_adversarial_image_cma_with_config(
         current_question = total_prompt_list[text_idx]
         current_question = f"Against the background of {environment}, {current_question}"
         
-        # 构建 VQA 提示
-        question_part = f"Question:{current_question}"
-        answer_part = f"Answer:{config.target_text}"
-        
-        # 处理文本输入
-        question_inputs = processor(
-            text=[question_part],
+        # 构建 VQA 模板（与 cma.py 对齐）
+        current_question, current_answer = eval_model.get_vqa_prompt(
+            question=current_question, answer=config.target_text
+        )
+        current_text = current_question + current_answer
+
+        # 处理整体文本输入
+        current_inputs = processor(
+            text=[current_text],
             padding=True,
             truncation=True,
             max_length=1000,
             return_tensors="pt"
-        ).to(device_str)
+        ).to(tensor_device)
+
+        # 问题部分输入
+        question_inputs = processor(
+            text=[current_question],
+            padding=True,
+            truncation=True,
+            max_length=1000,
+            return_tensors="pt"
+        ).to(tensor_device)
         
+        # 答案部分输入
         answer_inputs = processor.tokenizer.encode(
-            answer_part,
+            current_answer,
             add_special_tokens=False,
             return_tensors="pt"
-        ).to(device_str)
+        ).to(tensor_device).detach()
         
-        # 获取目标 token ids
-        target_ids = processor.tokenizer.encode(
+        # 目标 token ids
+        current_target = processor.tokenizer.encode(
             config.target_text,
             add_special_tokens=True,
             return_tensors="pt"
-        ).to(device_str)
+        ).to(tensor_device).detach()
         
-        # 构建组合嵌入
+        # 构建组合嵌入与标签（与 cma.py 的 embed_adv 一致）
         question_embeddings = eval_model.model.get_input_embeddings()(question_inputs['input_ids'])
         answer_embeddings = eval_model.model.get_input_embeddings()(answer_inputs)
-        
-        combined_embeddings = torch.cat([
-            question_embeddings,
-            adversarial_embeddings,
-            answer_embeddings
-        ], dim=1)
-        
-        # 构建 input_ids 和 attention_mask
-        pad_token_id = processor.tokenizer.pad_token_id
-        combined_input_ids = torch.cat([
-            question_inputs.input_ids,
-            torch.full((1, config.adversarial_length), pad_token_id, device=device_str),
-            answer_inputs
-        ], dim=1)
-        combined_attention_mask = torch.cat([
-            question_inputs.attention_mask,
-            torch.ones((1, config.adversarial_length), device=device_str),
-            torch.ones_like(answer_inputs)
-        ], dim=1)
-        
-        # 构建 labels
-        labels = torch.full_like(combined_input_ids, -100)
-        labels[:, -target_ids.shape[1]:] = target_ids
+        model_inputs, labels, combined_embeddings = _build_inputs_for_embed_adv(
+            question_inputs=question_inputs,
+            answer_inputs=answer_inputs,
+            question_embeddings=question_embeddings,
+            answer_embeddings=answer_embeddings,
+            current_target=current_target,
+            adversarial_embeddings=adversarial_embeddings,
+            adversarial_length=config.adversarial_length,
+            processor=processor,
+        )
         
         # 对抗图像
         adv_image = original_image + image_perturbation
@@ -296,9 +332,9 @@ def generate_adversarial_image_cma_with_config(
         
         # 前向传播
         outputs = eval_model.model(
-            input_ids=combined_input_ids,
+            input_ids=model_inputs["input_ids"],
             pixel_values=adv_image,
-            attention_mask=combined_attention_mask,
+            attention_mask=model_inputs["attention_mask"],
             labels=labels
         )
         
@@ -341,11 +377,8 @@ def generate_adversarial_image_cma_with_config(
         if (ep + 1) % 50 == 0:
             print(f"  迭代 {ep+1}/{config.iters}, Loss: {loss.item():.4f}")
     
-    # 使用最佳攻击结果
-    if best_attack is not None:
-        final_perturbation = best_attack
-    else:
-        final_perturbation = image_perturbation
+    # 与 cma.py 保持一致：最终使用当前迭代扰动
+    final_perturbation = image_perturbation.detach()
     
     # 生成对抗图像
     adv_image = original_image + final_perturbation

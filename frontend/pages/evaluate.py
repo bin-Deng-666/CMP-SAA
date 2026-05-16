@@ -1,17 +1,43 @@
 import streamlit as st
 import sys
 import os
+import re
 from PIL import Image
 import torch
 import time
 import importlib
 
-# 添加项目根目录到路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_frontend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _frontend_dir not in sys.path:
+    sys.path.insert(0, _frontend_dir)
+import bootstrap
+
+bootstrap.setup_project_path()
 
 from utils.attack_tool import load_model
+from frontend.utils.page_state import (
+    PAGE_EVALUATE,
+    PAGE_HOME,
+    clear_evaluate_state,
+    on_page_enter,
+)
+
+
+def extract_vqa_answer(text: str) -> str:
+    """从 BLIP2 解码结果中提取 Answer: 之后的回答内容。"""
+    if not text:
+        return text
+    match = re.search(r"Answer:(.*?)(?:Question|$)", text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    if "Answer:" in text:
+        return text.split("Answer:", 1)[-1].strip()
+    return text.strip()
+
 
 st.set_page_config(page_title="对抗图像测试", layout="wide", initial_sidebar_state="collapsed")
+
+on_page_enter(PAGE_EVALUATE, clear_evaluate_state)
 
 st.markdown("""
 <style>
@@ -41,6 +67,8 @@ st.markdown("""
 header_col1, header_col2, header_col3 = st.columns([1, 3, 1])
 with header_col1:
     if st.button("← 返回", key="back_btn"):
+        clear_evaluate_state()
+        st.session_state["active_page"] = PAGE_HOME
         st.switch_page("home.py")
 with header_col2:
     st.title("📊 对抗图像测试")
@@ -48,24 +76,19 @@ with header_col2:
 
 st.divider()
 
-# 初始化会话状态
-if 'page_initialized' not in st.session_state:
-    st.session_state.original_image = None
-    st.session_state.adversarial_image = None
-    st.session_state.perturbation_image = None
-    st.session_state.original_answer = None
-    st.session_state.adversarial_answer = None
-    st.session_state.img_id = None
-    st.session_state.page_initialized = True
-
-
 # ==================== 步骤1: 加载图像 ====================
 st.markdown("### 🖼️ 步骤 1: 加载图像")
 
 # 输入图像ID
 col1, col2 = st.columns([3, 1])
 with col1:
-    img_id = st.text_input("图像ID", placeholder="例如: 294", help="输入要加载的图像ID", label_visibility="collapsed")
+    img_id = st.text_input(
+        "图像ID",
+        placeholder="例如: 294",
+        help="输入要加载的图像ID",
+        label_visibility="collapsed",
+        key="eval_img_id_input",
+    )
 with col2:
     load_btn = st.button("📁 加载图像", use_container_width=True, type="primary")
 
@@ -96,43 +119,52 @@ if load_btn:
                 st.error(f"目录中缺少以下文件: {', '.join(missing_files)}")
             else:
                 # 加载图像
-                st.session_state.original_image = Image.open(original_path)
-                st.session_state.adversarial_image = Image.open(adversarial_path)
+                st.session_state.eval_original_image = Image.open(original_path)
+                st.session_state.eval_adversarial_image = Image.open(adversarial_path)
+                st.session_state.eval_img_id = img_id
                 
                 # 尝试加载扰动可视化（可选）
                 if os.path.exists(perturbation_path):
-                    st.session_state.perturbation_image = Image.open(perturbation_path)
+                    st.session_state.eval_perturbation_image = Image.open(perturbation_path)
                 else:
-                    st.session_state.perturbation_image = None
+                    st.session_state.eval_perturbation_image = None
+                
+                st.session_state.eval_original_answer = None
+                st.session_state.eval_adversarial_answer = None
                 
                 st.success(f"✅ 图像 {img_id} 加载成功！")
 
 # 显示图像
-if st.session_state.original_image and st.session_state.adversarial_image:
+if st.session_state.get("eval_original_image") and st.session_state.get("eval_adversarial_image"):
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown("**🖼️ 原始图像**")
-        st.image(st.session_state.original_image, use_container_width=True)
+        st.image(st.session_state.eval_original_image, use_container_width=True)
     
     with col2:
         st.markdown("**🛡️ 对抗图像**")
-        st.image(st.session_state.adversarial_image, use_container_width=True)
+        st.image(st.session_state.eval_adversarial_image, use_container_width=True)
     
     with col3:
         st.markdown("**🔍 扰动可视化**")
-        if st.session_state.perturbation_image:
-            st.image(st.session_state.perturbation_image, use_container_width=True)
+        if st.session_state.get("eval_perturbation_image"):
+            st.image(st.session_state.eval_perturbation_image, use_container_width=True)
         else:
             st.info("无扰动可视化")
 
 
 # ==================== 步骤2: 输入问题 ====================
-if st.session_state.original_image and st.session_state.adversarial_image:
+if st.session_state.get("eval_original_image") and st.session_state.get("eval_adversarial_image"):
     st.divider()
     st.markdown("### ❓ 步骤 2: 输入测试问题")
     
-    question = st.text_area("请输入问题", placeholder="例如: What is in the image?", height=80)
+    question = st.text_area(
+        "请输入问题",
+        placeholder="例如: What is in the image?",
+        height=80,
+        key="eval_question",
+    )
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -143,39 +175,44 @@ if st.session_state.original_image and st.session_state.adversarial_image:
             st.warning("请输入测试问题")
         else:
             with st.spinner("正在加载模型并获取回答..."):
-                # 加载BLIP2模型
-                device = "cuda" if torch.cuda.is_available() else "cpu"
+                # 加载BLIP2模型（device 需为 int：0=GPU, -1=CPU，与 blip2.py / cma.py 一致）
+                device = 0 if torch.cuda.is_available() else -1
                 module = importlib.import_module("models.blip2")
                 eval_model = load_model(device, module, "blip2")
                 
-                # 准备输入
-                prompt = eval_model.get_vqa_prompt(question)
+                # 准备输入（与 test_model_loading.py 一致：Question + Answer 前缀）
+                question_part, answer_part = eval_model.get_vqa_prompt(question)
+                prompt = question_part + answer_part
                 
                 # 获取原始图像回答
-                ori_output = eval_model.get_outputs(
-                    batch_images=[st.session_state.original_image],
-                    batch_text=[prompt],
-                    max_generation_length=50,
-                    num_beams=3,
-                    length_penalty=0
-                )[0]
+                ori_output = extract_vqa_answer(
+                    eval_model.get_outputs(
+                        batch_images=[st.session_state.eval_original_image],
+                        batch_text=[prompt],
+                        max_generation_length=50,
+                        num_beams=3,
+                        length_penalty=0,
+                    )[0]
+                )
                 
                 # 获取对抗图像回答
-                adv_output = eval_model.get_outputs(
-                    batch_images=[st.session_state.adversarial_image],
-                    batch_text=[prompt],
-                    max_generation_length=50,
-                    num_beams=3,
-                    length_penalty=0
-                )[0]
+                adv_output = extract_vqa_answer(
+                    eval_model.get_outputs(
+                        batch_images=[st.session_state.eval_adversarial_image],
+                        batch_text=[prompt],
+                        max_generation_length=50,
+                        num_beams=3,
+                        length_penalty=0,
+                    )[0]
+                )
                 
-                st.session_state.original_answer = ori_output
-                st.session_state.adversarial_answer = adv_output
+                st.session_state.eval_original_answer = ori_output
+                st.session_state.eval_adversarial_answer = adv_output
                 
                 st.success("✅ 测试完成！")
     
     # ==================== 步骤3: 显示结果 ====================
-    if st.session_state.original_answer and st.session_state.adversarial_answer:
+    if st.session_state.get("eval_original_answer") and st.session_state.get("eval_adversarial_answer"):
         st.divider()
         st.markdown("### 📊 步骤 3: 测试结果对比")
         
@@ -183,17 +220,17 @@ if st.session_state.original_image and st.session_state.adversarial_image:
         
         with col1:
             st.markdown("**🖼️ 原始图像回答**")
-            st.info(st.session_state.original_answer)
+            st.info(st.session_state.eval_original_answer)
         
         with col2:
             st.markdown("**🛡️ 对抗图像回答**")
-            st.info(st.session_state.adversarial_answer)
+            st.info(st.session_state.eval_adversarial_answer)
         
         # 攻击成功判断
         st.markdown("---")
         result_col1, result_col2, result_col3 = st.columns([1, 2, 1])
         with result_col2:
-            if st.session_state.original_answer != st.session_state.adversarial_answer:
+            if st.session_state.eval_original_answer != st.session_state.eval_adversarial_answer:
                 st.success("🎯 攻击成功！")
             else:
                 st.error("❌ 攻击失败！")

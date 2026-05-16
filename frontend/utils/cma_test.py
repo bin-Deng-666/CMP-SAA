@@ -25,7 +25,7 @@ def main():
     print("=" * 60)
     
     # 加载测试图像
-    test_image_path = os.path.join(project_root, "data", "val2014", "COCO_val2014_000000000042.jpg")
+    test_image_path = os.path.join(project_root, "data", "val2014", "COCO_val2014_000000000294.jpg")
     print(f"测试图像: {test_image_path}")
     
     if not os.path.exists(test_image_path):
@@ -44,7 +44,7 @@ def main():
     print("攻击参数配置:")
     print("-" * 60)
     config = {
-        "image_id": "42",  # 图像ID（用于获取提示词）
+        "image_id": "294",  # 图像ID（用于获取提示词）
         "model_name": "blip2",  # 模型名称
         "method": "embed_adv",  # 攻击方法
         "target_text": "Unknown",  # 目标攻击文本

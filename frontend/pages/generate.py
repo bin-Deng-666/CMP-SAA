@@ -5,13 +5,38 @@ from PIL import Image
 import torch
 import io
 
-# 添加项目根目录到路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# 项目根目录加入 path，并避免 frontend/utils 与根目录 utils 冲突
+_frontend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _frontend_dir not in sys.path:
+    sys.path.insert(0, _frontend_dir)
+import bootstrap
+
+bootstrap.setup_project_path()
 
 from utils.attack_tool import load_dataset
-from utils.maximize_image import generate_adversarial_image
+from frontend.utils.maximize_image import generate_adversarial_image
+from frontend.utils.cma_image import generate_adversarial_image_cma
+from frontend.utils.page_state import (
+    PAGE_GENERATE,
+    PAGE_HOME,
+    clear_generate_state,
+    on_page_enter,
+)
+from frontend.utils.save_results import save_adversarial_results
+
+
+def _persist_generation_to_data(image_id: str) -> str:
+    """保存当前生成结果到 frontend/data/{image_id}/。"""
+    return save_adversarial_results(
+        image_id,
+        st.session_state.gen_original_image,
+        st.session_state.gen_adversarial_image,
+        st.session_state.get("gen_perturbation"),
+    )
 
 st.set_page_config(page_title="对抗图像生成", layout="wide", initial_sidebar_state="collapsed")
+
+on_page_enter(PAGE_GENERATE, clear_generate_state)
 
 st.markdown("""
 <style>
@@ -40,21 +65,14 @@ st.markdown("""
 header_col1, header_col2, header_col3 = st.columns([1, 3, 1])
 with header_col1:
     if st.button("← 返回", key="back_btn"):
+        clear_generate_state()
+        st.session_state["active_page"] = PAGE_HOME
         st.switch_page("home.py")
 with header_col2:
     st.title("🛡️ 对抗图像生成")
     st.caption("选择攻击方法并配置参数，生成对抗样本")
 
 st.divider()
-
-# 初始化会话状态
-if 'page_initialized' not in st.session_state:
-    st.session_state.original_image = None
-    st.session_state.adversarial_image = None
-    st.session_state.perturbation = None
-    st.session_state.img_id = None
-    st.session_state.page_initialized = True
-
 
 # ==================== 步骤1: 选择攻击方法 ====================
 st.markdown("### 📋 步骤 1: 选择攻击方法")
@@ -63,7 +81,8 @@ method = st.selectbox(
     "选择攻击方法",
     ["请选择...", "跨模态辅助攻击方法", "多维度语义攻击方法"],
     help="跨模态辅助攻击方法: 基于跨模态辅助的对抗攻击\n多维度语义攻击方法: 基于多维度语义最大化的对抗攻击",
-    label_visibility="collapsed"
+    label_visibility="collapsed",
+    key="gen_method",
 )
 
 # ==================== 步骤2: 配置参数 ====================
@@ -151,7 +170,12 @@ if method != "请选择...":
     
     col1, col2 = st.columns([4, 1])
     with col1:
-        img_id = st.text_input("图像ID", placeholder="请输入图像ID，例如: 294", label_visibility="collapsed")
+        img_id = st.text_input(
+            "图像ID",
+            placeholder="请输入图像ID，例如: 294",
+            label_visibility="collapsed",
+            key="gen_img_id_input",
+        )
     with col2:
         load_btn = st.button("📂 加载图像", use_container_width=True, type="secondary")
     
@@ -179,20 +203,20 @@ if method != "请选择...":
             if loaded_image is None:
                 st.error(f"未找到图像ID: {img_id}")
             else:
-                st.session_state.original_image = loaded_image
-                st.session_state.img_id = img_id
+                st.session_state.gen_original_image = loaded_image
+                st.session_state.gen_img_id = img_id
                 st.success(f"✅ 图像 {img_id} 加载成功")
     elif load_btn and not img_id:
         st.warning("请输入图像ID")
     
     # 显示原始图像
-    if st.session_state.original_image:
-        st.image(st.session_state.original_image, caption="原始图像", use_container_width=True)
+    if st.session_state.get("gen_original_image"):
+        st.image(st.session_state.gen_original_image, caption="原始图像", use_container_width=True)
     else:
         st.info("请输入图像ID并点击加载按钮")
     
     # ==================== 步骤4: 生成对抗图像 ====================
-    if st.session_state.original_image:
+    if st.session_state.get("gen_original_image"):
         st.divider()
         st.markdown("### 🚀 步骤 4: 生成对抗图像")
         
@@ -229,7 +253,7 @@ if method != "请选择...":
                         
                         # 调用多维度语义攻击方法
                         original_pil, adv_pil, perturbation_pil = generate_adversarial_image(
-                            image=st.session_state.original_image,
+                            image=st.session_state.gen_original_image,
                             backbones=backbones_list,
                             crop_types=crop_types_list,
                             num_crops=random_num_crops,
@@ -243,11 +267,17 @@ if method != "请选择...":
                             progress_callback=progress_callback
                         )
                         
-                        st.session_state.adversarial_image = adv_pil
-                        st.session_state.perturbation = perturbation_pil
+                        st.session_state.gen_adversarial_image = adv_pil
+                        st.session_state.gen_perturbation = perturbation_pil
                         
                         progress_container.empty()
                         st.success("✅ 对抗图像生成完成！")
+                        try:
+                            saved_dir = _persist_generation_to_data(st.session_state.gen_img_id)
+                            st.session_state.gen_saved_dir = saved_dir
+                            st.info(f"已保存至 `{saved_dir}`")
+                        except Exception as save_err:
+                            st.warning(f"自动保存失败: {save_err}")
                         
                     except Exception as e:
                         st.error(f"生成失败: {str(e)}")
@@ -255,12 +285,54 @@ if method != "请选择...":
                         st.error(traceback.format_exc())
                 
                 elif method == "跨模态辅助攻击方法":
-                    st.warning("跨模态辅助攻击方法正在开发中...")
-                    # TODO: 实现 CMA 攻击方法调用
+                    try:
+                        # 创建进度区域
+                        progress_container = st.container()
+                        with progress_container:
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                        
+                        def progress_callback(current, total, loss):
+                            progress = current / total
+                            progress_bar.progress(min(progress, 1.0))
+                            status_text.text(f"迭代进度: {current}/{total}, 当前Loss: {loss:.4f}")
+                        
+                        # 调用跨模态辅助攻击方法
+                        original_pil, adv_pil, perturbation_pil = generate_adversarial_image_cma(
+                            image=st.session_state.gen_original_image,
+                            image_id=st.session_state.gen_img_id,
+                            model_name="blip2",
+                            method="embed_adv",
+                            target_text=target_text,
+                            adversarial_length=adv_length,
+                            prompt_num=prompt_num,
+                            iterations=iters,
+                            epsilon=fraction,
+                            alpha=img_lr,
+                            device=0 if torch.cuda.is_available() else -1,
+                            progress_callback=progress_callback
+                        )
+                        
+                        st.session_state.gen_adversarial_image = adv_pil
+                        st.session_state.gen_perturbation = perturbation_pil
+                        
+                        progress_container.empty()
+                        st.success("✅ 对抗图像生成完成！")
+                        try:
+                            saved_dir = _persist_generation_to_data(st.session_state.gen_img_id)
+                            st.session_state.gen_saved_dir = saved_dir
+                            st.info(f"已保存至 `{saved_dir}`")
+                        except Exception as save_err:
+                            st.warning(f"自动保存失败: {save_err}")
+                        
+                    except Exception as e:
+                        st.error(f"生成失败: {str(e)}")
+                        import traceback
+                        st.error(traceback.format_exc())
         
         
         # ==================== 步骤5: 显示结果 ====================
-        if st.session_state.adversarial_image:
+        if st.session_state.get("gen_adversarial_image"):
             st.divider()
             st.markdown("### 📊 步骤 5: 生成结果")
             
@@ -268,37 +340,45 @@ if method != "请选择...":
             
             with result_col1:
                 st.markdown("**🖼️ 原始图像**")
-                st.image(st.session_state.original_image, use_container_width=True)
+                st.image(st.session_state.gen_original_image, use_container_width=True)
             
             with result_col2:
                 st.markdown("**🛡️ 对抗图像**")
-                st.image(st.session_state.adversarial_image, use_container_width=True)
+                st.image(st.session_state.gen_adversarial_image, use_container_width=True)
             
             with result_col3:
                 st.markdown("**🔍 扰动可视化**")
-                if st.session_state.perturbation is not None:
-                    st.image(st.session_state.perturbation, use_container_width=True)
+                if st.session_state.get("gen_perturbation") is not None:
+                    st.image(st.session_state.gen_perturbation, use_container_width=True)
                 else:
                     st.info("暂不可用")
             
-            # 下载按钮
+            img_id_val = st.session_state.get("gen_img_id") or img_id or "image"
+            if st.session_state.get("gen_saved_dir"):
+                st.info(
+                    f"结果目录：`{st.session_state.gen_saved_dir}` "
+                    f"（含 original.png、adversarial.png、perturbation_vis.png）"
+                )
+
             st.markdown("---")
-            download_col1, download_col2, download_col3 = st.columns([1, 2, 1])
-            with download_col2:
-                # 保存图像到缓冲区
-                import io
+            action_col1, action_col2, action_col3 = st.columns([1, 1, 1])
+            with action_col1:
+                if st.button("💾 重新保存到 data", use_container_width=True):
+                    try:
+                        saved_dir = _persist_generation_to_data(img_id_val)
+                        st.session_state.gen_saved_dir = saved_dir
+                        st.success(f"已保存至 `{saved_dir}`")
+                    except Exception as e:
+                        st.error(f"保存失败: {e}")
+            with action_col2:
                 buf = io.BytesIO()
-                st.session_state.adversarial_image.save(buf, format='PNG')
+                st.session_state.gen_adversarial_image.save(buf, format="PNG")
                 buf.seek(0)
-                
-                # 获取图像ID（如果未输入则使用默认值）
-                img_id_val = img_id if img_id else 'image'
-                
                 st.download_button(
-                    label="💾 下载对抗图像",
+                    label="⬇️ 下载对抗图像",
                     data=buf,
                     file_name=f"adversarial_{img_id_val}.png",
                     mime="image/png",
-                    use_container_width=True
+                    use_container_width=True,
                 )
             
