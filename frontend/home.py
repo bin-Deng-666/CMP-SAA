@@ -153,4 +153,4 @@ with col2:
         st.switch_page("pages/evaluate.py")
 
 # 页脚
-st.markdown('<div class="footer">毕业设计项目 · ZY2306335 邓彬 · 支持 BLIP2 / InstructBLIP</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">Adversarial Attack Research · BLIP2 / InstructBLIP</div>', unsafe_allow_html=True)
