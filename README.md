@@ -1,58 +1,98 @@
-# GraduationProject
+# CMP-SAA: Cross-Modal Plug-in Suffix Adversarial Attack towards VLMs
 
-对抗攻击研究项目，包含对抗样本生成、评估和可视化工具。
+Official implementation of **CMP-SAA**, a cross-modal adversarial attack method for Vision-Language Models (VLMs) such as **BLIP-2** and **InstructBLIP**.
 
-## 文件树
+> 📄 Paper under review. Code will be fully released upon acceptance.
+
+## 🔍 Overview
+
+CMP-SAA injects a **lightweight plug-in suffix** into the input of VLMs through joint text-image adversarial optimization, with three key components:
+
+1. **Cross-Modal Adversarial Mechanism**
+   - **Image side**: optimizes perturbations in a continuous embedding space to *raise* the probability of generating the target text
+   - **Text side**: reverse-optimizes text embeddings to *lower* the probability of the original output, sharpening the attack
+
+2. **Lightweight Adversarial Suffix**
+   - Continuous embeddings are optimized and mapped to discrete tokens via a **Straight-Through Estimator (STE)**
+   - Implemented as a *plug-in suffix* appended after the prompt — no retraining, no modification of model weights
+   - One suffix is **shared across multiple prompts** (`--prompt_num`), enabling cross-prompt transferability
+
+3. **Environment-Aware Prefix**
+   - A VLM-generated **environment description prefix** (see `utils/env_desc.py`) provides richer textual guidance while constraining the semantic space
+
+## 📊 Evaluation
+
+- **Models**: BLIP-2 (OPT-2.7B), InstructBLIP (Vicuna-7B)
+- **Datasets**: COCO / VQAv2
+- **Metric**: Attack Success Rate (generating the target text)
+
+## 📁 Project Structure
 
 ```
-GraduationProject/
-├── feature_extractors/          # 特征提取器模块
-│   ├── Base.py                  # 基础特征提取器类
-│   ├── ClipB16.py              # CLIP B16 特征提取器
-│   ├── ClipB32.py              # CLIP B32 特征提取器
-│   ├── ClipL336.py             # CLIP L336 特征提取器
-│   ├── ClipLaion.py            # CLIP Laion 特征提取器
-│   └── __init__.py             # 模块初始化
-├── frontend/                    # 前端可视化界面
-│   ├── pages/                   # 页面目录
-│   │   ├── generate.py         # 对抗图像生成页面
-│   │   └── evaluate.py         # 对抗图像测试页面
-│   └── home.py                  # 主页面入口
-├── models/                      # 模型定义
-│   ├── flamingo_src/            # Flamingo 模型源码
-│   │   ├── __init__.py
-│   │   ├── detail of lang encoder.md
-│   │   ├── factory.py
-│   │   ├── flamingo.py
-│   │   ├── flamingo_lm.py
-│   │   ├── helpers.py
-│   │   └── utils.py
-│   ├── BaseEvalModel.py         # 基础评估模型类
-│   ├── blip2.py                # BLIP2 模型实现
-│   └── instructblip.py         # InstructBLIP 模型实现
-├── test/                        # 测试脚本
-│   ├── test_dataset_loading.py  # 数据集加载测试
-│   ├── test_embeddings.py       # 嵌入测试
-│   ├── test_model_loading.py    # 模型加载测试
-│   └── test_pytorch.py          # PyTorch 测试
-├── utils/                       # 工具函数
-│   ├── __init__.py
-│   ├── attack_tool.py           # 攻击工具函数
-│   ├── crop_images.py           # 图像裁剪工具
-│   ├── crop_objects.py          # 目标裁剪工具
-│   ├── env_desc.py              # 环境描述
-│   ├── eval_datasets.py         # 评估数据集
-│   └── eval_tool.py             # 评估工具函数
-├── .gitignore                   # Git 忽略配置
-├── cma.py                       # CMA-ES 攻击算法
-├── maximize.py                  # 最大化攻击算法
-└── test.py                      # 主测试脚本
+CMP-SAA/
+├── cma.py                     # Main attack pipeline & entry point
+├── models/                    # VLM implementations (BLIP-2 / InstructBLIP / Flamingo)
+├── feature_extractors/        # CLIP-based feature extractors (B16 / B32 / L336 / Laion)
+├── utils/
+│   ├── attack_tool.py         # Data/model loading, STE, prompt mapping
+│   ├── eval_tool.py           # Attack success evaluation
+│   ├── eval_datasets.py       # COCO dataset loading
+│   └── env_desc.py            # VLM-generated environment descriptions
+├── frontend/                  # Streamlit demo: adversarial generation & evaluation
+└── test/                      # Environment sanity checks
 ```
 
-## 主要功能模块
+## 🚀 Usage
 
-- **对抗攻击算法**: `cma.py`, `maximize.py`
-- **模型实现**: `models/` 目录下的 BLIP2、InstructBLIP 等
-- **评估工具**: `utils/eval_tool.py`, `test.py`
-- **可视化界面**: `frontend/` 目录下的 Streamlit 应用
-- **特征提取**: `feature_extractors/` 目录下的 CLIP 系列提取器
+### 1. Environment
+
+```bash
+pip install -r requirements.txt   # PyTorch, transformers, etc.
+python test/test_pytorch.py       # sanity check
+```
+
+### 2. Data & Models
+
+- Download BLIP-2 / InstructBLIP weights to `models/Salesforce/...`
+- Download VQAv2 (COCO images + questions/annotations) and place under `data/` (paths in `utils/attack_tool.py`)
+
+### 3. Run the Attack
+
+```bash
+python cma.py \
+    --model_name blip2 \
+    --method token_adv \
+    --prompt_num 50 \
+    --adversarial_length 10 \
+    --iters 800 \
+    --epsilon 0.125 --alpha 0.004
+```
+
+**Key arguments**:
+
+| Argument | Description |
+|----------|-------------|
+| `--model_name` | `blip2` / `instructblip` |
+| `--method` | attack variant: `token_adv` / `embed_adv` / `grad_embed_noise` / baselines |
+| `--prompt_num` | number of prompts sharing one suffix (transferability) |
+| `--adversarial_length` | suffix length |
+| `--iters` / `--epsilon` / `--alpha` | optimization iterations & PGD budget/step |
+
+### 4. Demo
+
+A Streamlit front-end for interactive adversarial image generation and evaluation:
+
+```bash
+streamlit run frontend/home.py
+```
+
+## 📚 Citation
+
+```bibtex
+@inproceedings{deng2026cmpsaa,
+  title     = {CMP-SAA: Cross-Modal Plug-in Suffix Adversarial Attack towards Vision-Language Models},
+  author    = {Brin},
+  booktitle = {Under review},
+  year      = {2026}
+}
+```
